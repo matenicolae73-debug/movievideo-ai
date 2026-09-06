@@ -16,8 +16,8 @@ jobs:
 
       - name: Unzip ViralMovie API
         run: |
-          unzip -o viralmovie-api-final.zip -d .
-          rm -f viralmovie-api-final.zip
+          unzip -o viralmovie-api-final-fixed.zip -d .
+          rm -f viralmovie-api-final-fixed.zip
 
       - name: Verify project
         run: |
