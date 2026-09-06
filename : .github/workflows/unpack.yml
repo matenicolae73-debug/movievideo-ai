@@ -2,9 +2,6 @@ name: Unpack ViralMovie
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - "viralmovie-api-final.zip"
 
 jobs:
   unpack:
@@ -14,18 +11,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Unpack ZIP
+      - name: Unzip ViralMovie
         run: |
-          unzip -o viralmovie-api-final.zip -d extracted
-
-      - name: Copy project to root
-        run: |
-          cp -r extracted/* .
-          cp -r extracted/.[!.]* . 2>/dev/null || true
-          rm -rf extracted
+          unzip -o viralmovie-api-final.zip -d .
           rm -f viralmovie-api-final.zip
 
-      - name: Commit files
+      - name: Show files
+        run: |
+          echo "ViralMovie unpacked successfully:"
+          find . -maxdepth 3 -type f | sort
+
+      - name: Commit changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
