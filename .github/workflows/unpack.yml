@@ -3,28 +3,40 @@ name: Unpack ViralMovie
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   unpack:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Unzip ViralMovie
+      - name: Unzip ViralMovie API
         run: |
           unzip -o viralmovie-api-final.zip -d .
           rm -f viralmovie-api-final.zip
 
-      - name: Show files
+      - name: Verify project
         run: |
-          echo "ViralMovie unpacked successfully:"
-          find . -maxdepth 3 -type f | sort
+          echo "=== ViralMovie files ==="
+          test -f package.json
+          test -d app
+          test -d lib
+          echo "Project unpacked successfully!"
 
-      - name: Commit changes
+      - name: Commit extracted project
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           git add -A
-          git diff --cached --quiet || git commit -m "Unpack ViralMovie API"
-          git push
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Unpack ViralMovie API"
+            git push
+          fi
