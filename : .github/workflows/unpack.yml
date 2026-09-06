@@ -1,0 +1,39 @@
+name: Unzip ViralMovie API
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  unzip:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Unzip project
+        run: |
+          unzip -o viralmovie-api-final.zip -d .
+          rm -f viralmovie-api-final.zip
+
+      - name: Show project files
+        run: |
+          echo "=== ViralMovie API ==="
+          find . -maxdepth 2 -type f | sort
+
+      - name: Commit extracted project
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Install ViralMovie API project"
+            git push
+          fi
