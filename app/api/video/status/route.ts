@@ -65,7 +65,7 @@ export async function GET(req: Request) {
       )
     }
 
-    // Already finished — don't call fal.ai again.
+    // Job already finished
     if (
       job.status === "COMPLETED" ||
       job.status === "FAILED" ||
@@ -80,12 +80,14 @@ export async function GET(req: Request) {
       })
     }
 
-    // Ask fal.ai for the current status.
+    // Ask fal.ai for the latest status
     const result = await getProviderStatus(id)
 
-    const providerStatus = String(result.status || "UNKNOWN").toUpperCase()
+    const providerStatus = String(
+      result.status || "UNKNOWN"
+    ).toUpperCase()
 
-    // Video successfully generated.
+    // Video completed successfully
     if (providerStatus === "COMPLETED") {
       await updateJob(id, {
         status: "COMPLETED",
@@ -94,7 +96,7 @@ export async function GET(req: Request) {
       })
     }
 
-    // Provider failed.
+    // Video generation failed
     else if (
       providerStatus === "FAILED" ||
       providerStatus === "CANCELLED" ||
@@ -115,7 +117,7 @@ export async function GET(req: Request) {
       }
     }
 
-    // Still processing.
+    // Still processing
     else {
       await updateJob(id, {
         status: providerStatus,
