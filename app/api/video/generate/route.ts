@@ -11,14 +11,25 @@ import { saveJob } from "@/lib/jobs"
 
 export const runtime = "nodejs"
 
+function getBearerKey(req: Request): string | null {
+  const auth = req.headers.get("authorization") || ""
+
+  if (!/^Bearer\s+vm_live_[a-f0-9]{48}$/i.test(auth)) {
+    return null
+  }
+
+  return auth.replace(/^Bearer\s+/i, "").trim()
+}
+
 export async function POST(req: Request) {
   let idemKey = ""
   let customerKey = ""
 
   try {
-    const auth = req.headers.get("authorization") || ""
+    // 1. Verify ViralMovie API key
+    const apiKey = getBearerKey(req)
 
-    if (!/^Bearer\s+vm_live_[a-f0-9]{48}$/i.test(auth)) {
+    if (!apiKey) {
       return NextResponse.json(
         {
           ok: false,
@@ -28,9 +39,9 @@ export async function POST(req: Request) {
       )
     }
 
-    customerKey = auth.replace(/^Bearer\s+/i, "").trim()
+    customerKey = apiKey
 
-    // Rate limit
+    // 2. Rate limit
     const forwardedFor =
       req.headers.get("x-forwarded-for") || "unknown"
 
@@ -50,8 +61,10 @@ export async function POST(req: Request) {
       )
     }
 
-    // Idempotency protection
-    const idem = (req.headers.get("idempotency-key") || "").trim()
+    // 3. Idempotency
+    const idem = (
+      req.headers.get("idempotency-key") || ""
+    ).trim()
 
     if (!/^[A-Za-z0-9._:-]{8,128}$/.test(idem)) {
       return NextResponse.json(
@@ -79,7 +92,7 @@ export async function POST(req: Request) {
       )
     }
 
-    // Request body
+    // 4. Read request body
     const body = await req.json()
 
     const prompt = String(body?.prompt || "").trim()
@@ -97,15 +110,17 @@ export async function POST(req: Request) {
       )
     }
 
-    // Duration: 1-8 seconds
+    // 5. Duration
     const requestedDuration = Number(body?.duration)
 
-    const duration =
-      Number.isFinite(requestedDuration)
-        ? Math.min(8, Math.max(1, Math.round(requestedDuration)))
-        : 5
+    const duration = Number.isFinite(requestedDuration)
+      ? Math.min(
+          8,
+          Math.max(1, Math.round(requestedDuration))
+        )
+      : 3
 
-    // Resolution
+    // 6. Resolution
     const resolution = [
       "360p",
       "540p",
@@ -115,7 +130,7 @@ export async function POST(req: Request) {
       ? body.resolution
       : "720p"
 
-    // Aspect ratio
+    // 7. Aspect ratio
     const aspectRatio = [
       "16:9",
       "9:16",
@@ -124,7 +139,7 @@ export async function POST(req: Request) {
       ? body.aspectRatio
       : "16:9"
 
-    // Credit pricing
+    // 8. Calculate credits
     const creditsPerSecond =
       resolution === "1080p"
         ? 4
@@ -132,9 +147,10 @@ export async function POST(req: Request) {
           ? 3
           : 1
 
-    const creditCost = duration * creditsPerSecond
+    const creditCost =
+      duration * creditsPerSecond
 
-    // Charge credits BEFORE generation
+    // 9. Charge credits
     const debit = await consumeKey(
       customerKey,
       creditCost
@@ -149,8 +165,8 @@ export async function POST(req: Request) {
       )
     }
 
+    // 10. Generate video
     try {
-      // Generate through fal.ai / Vidu Q3 Turbo
       const job = await generateWithProvider({
         prompt,
         duration,
@@ -158,8 +174,7 @@ export async function POST(req: Request) {
         aspectRatio,
       })
 
-      // Local mode does not create a remote job.
-      // Production uses fal.ai and therefore saves the job.
+      // 11. Save job in Redis
       if (job.status !== "LOCAL_RENDER") {
         await saveJob(
           job.requestId,
@@ -168,49 +183,64 @@ export async function POST(req: Request) {
         )
       }
 
+      // 12. Return result
       return NextResponse.json({
         ok: true,
 
         requestId: job.requestId,
+
         status: job.status,
-        videoUrl: job.videoUrl || null,
+
+        videoUrl:
+          job.videoUrl || null,
 
         creditsRemaining:
           debit.key?.credits ?? null,
 
-        creditsCharged: creditCost,
+        creditsCharged:
+          creditCost,
 
         render: {
-          durationSeconds: duration,
+          durationSeconds:
+            duration,
+
           resolution,
+
           aspectRatio,
+
           prompt,
         },
       })
     } catch (error) {
-      // Generation failed before a usable job was returned.
-      // Return the customer's credits.
+      // Provider failed -> refund credits
       await refundKey(
         customerKey,
         creditCost
       )
 
-      await releaseIdempotency(idemKey)
+      await releaseIdempotency(
+        idemKey
+      )
 
       throw error
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error(
       "VIDEO_GENERATION_ERROR",
       error
     )
 
+    const message =
+      error instanceof Error
+        ? error.message
+        : typeof error === "string"
+          ? error
+          : "Video generation failed."
+
     return NextResponse.json(
       {
         ok: false,
-        error:
-          error?.message ||
-          "Video generation failed.",
+        error: message,
       },
       { status: 500 }
     )
