@@ -1,34 +1,62 @@
-name: Unpack ViralForge AI
+name: Install ViralForge Coca-Cola Demo
 
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
-  unpack:
+  install:
     runs-on: ubuntu-latest
 
-    permissions:
-      contents: write
-
     steps:
-      - name: Checkout
+      - name: Download repository
         uses: actions/checkout@v4
 
-      - name: Unpack project
+      - name: Find Coca-Cola ZIP
         run: |
-          mkdir -p unpacked
-          unzip -o "ViralForge-AI-Coca-Cola-Demo.zip" -d unpacked
+          echo "Files in repository:"
+          find . -maxdepth 2 -type f | sort
+          echo "Searching ZIP..."
+          find . -name "*.zip" -print
 
-      - name: Move project files
+      - name: Extract Coca-Cola Demo
         run: |
-          cp -r unpacked/* .
-          rm -rf unpacked
-          rm -f "ViralForge-AI-Coca-Cola-Demo.zip"
+          ZIP=$(find . -maxdepth 2 -name "ViralForge-AI-Coca-Cola-Demo.zip" | head -n 1)
 
-      - name: Commit files
+          if [ -z "$ZIP" ]; then
+            echo "ERROR: ViralForge-AI-Coca-Cola-Demo.zip not found"
+            exit 1
+          fi
+
+          echo "Using: $ZIP"
+
+          mkdir -p /tmp/viralforge
+          unzip -o "$ZIP" -d /tmp/viralforge
+
+          cp -r /tmp/viralforge/* .
+
+          rm -f "$ZIP"
+
+      - name: Show installed project
+        run: |
+          echo "=== PROJECT ==="
+          ls -la
+          echo "=== APP ==="
+          ls -la app || true
+          echo "=== LIB ==="
+          ls -la lib || true
+          echo "=== DEMO VIDEO ==="
+          ls -lh public/demo/ || true
+
+      - name: Commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .
-          git commit -m "Unpack ViralForge AI project" || echo "No changes"
+
+          git add -A
+
+          git commit -m "Install ViralForge Coca-Cola Demo" || echo "Nothing to commit"
+
           git push
